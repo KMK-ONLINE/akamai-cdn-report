@@ -1,14 +1,15 @@
 import argparse
-import calendar
 import datetime
-import decimal
 import os
 
+from collections import OrderedDict
+from decimal import Decimal
 from urllib.parse import urljoin
 
 import requests
 
 from akamai.edgegrid import EdgeGridAuth
+from terminaltables import AsciiTable
 
 try:
     import simplejson as json
@@ -58,39 +59,6 @@ def get_report_sources(s):
     return result['contents']
 
 
-def get_products(s, report_sources, date):
-    path = '/billing-usage/v1/products'
-    date_json = json.dumps({'month': date.month, 'year': date.year})
-    data = {
-        'reportSources': json.dumps(report_sources),
-        'startDate': date_json,
-        'endDate': date_json,
-    }
-    response = s.post(urljoin(base_url, path), data=data)
-    if response.status_code != 200:
-        raise Exception('Cannot get products')
-
-    result = json.loads(response.text)
-    assert result['status'] == 'ok'
-    return result['contents']
-
-
-def get_csv(s, report_sources, products, date):
-    path = '/billing-usage/v1/contractUsageData/csv'
-    date_json = json.dumps({'month': date.month, 'year': date.year})
-    data = {
-        'reportSources': json.dumps(report_sources),
-        'products': json.dumps(products),
-        'startDate': date_json,
-        'endDate': date_json,
-    }
-    response = s.post(urljoin(base_url, path), data=data)
-    if response.status_code != 200:
-        raise Exception('Cannot get csv')
-
-    return response.text
-
-
 def get_cpcodes(s, report_source, month, year):
     path = '/billing-usage/v1/cpcodes/%(type)s/%(id)s' % report_source
     path += '/%d/%d' % (month, year)
@@ -122,9 +90,6 @@ def get_metrics(s, type):
 
 
 def get_data(s, type, start_date, end_date, lookups):
-    dimension_names = ['Cpcode']
-    metric_names = ['Edge Volume', 'Edge Hits']
-
     path = '/media-reports/v1/%s/data' % type
 
     # Endpoint expects a datetime, need to plus 1 to endDate to get midnight
@@ -132,21 +97,12 @@ def get_data(s, type, start_date, end_date, lookups):
     params = {
         'startDate': start_date.strftime(dt_format),
         'endDate': (end_date + datetime.timedelta(days=1)).strftime(dt_format),
-        'dimensions': ','.join(
-            str(lookups['dimension'][x])
-            for x in dimension_names
-        ),
-        'metrics': ','.join(
-            str(lookups['metric'][x])
-            for x in metric_names
-        ),
+        'dimensions': lookups['dimension']['Cpcode'],
+        'metrics': lookups['metric']['Edge Volume'],
     }
     response = s.get(urljoin(base_url, path), params=params)
 
-    print('== From %s to %s ==' % (start_date, end_date))
-
     if response.status_code == 204:
-        print("No data")
         return
 
     if response.status_code != 200:
@@ -154,14 +110,46 @@ def get_data(s, type, start_date, end_date, lookups):
         raise Exception('Cannot get data for %s' % type)
 
     result = json.loads(response.text)
-    for i, metric_name in enumerate(metric_names, 1):
-        print('>>> %s:' % metric_name)
-        unit = result['columns'][i]['unit'] or ''
-        total = 0
-        for row in result['rows']:
-            total += decimal.Decimal(row[i])
-            print('%s: %s %s' % (lookups['cpcode'][row[0]], row[i], unit))
-        print('Total: %s %s' % (total, unit))
+    for row in result['rows']:
+        yield (lookups['cpcode'][row[0]], row[1])
+
+
+def print_table(data, columns):
+    d = OrderedDict()
+    headers = [''] + columns
+    rows = [headers]
+
+    for type, period_idx, cpcode, value in data:
+        if type not in d:
+            d[type] = OrderedDict()
+        if cpcode not in d[type]:
+            d[type][cpcode] = [Decimal('0.00')] * len(columns)
+        d[type][cpcode][period_idx] = Decimal(value)
+
+    def to_title(s):
+        return s.replace('-', ' ').title()
+
+    total_values_list = []
+    for type, data_by_cpcode in d.items():
+        type_values_list = []
+
+        for cpcode, values in data_by_cpcode.items():
+            # call str as terminaltables can only print strings
+            rows.append([cpcode] + [str(x) for x in values])
+            type_values_list.append(values)
+
+        type_values = [sum(x) for x in zip(*type_values_list)]
+        rows.append([])
+        rows.append([to_title(type)] + [str(x) for x in type_values])
+        rows.append([])
+        total_values_list.append(type_values)
+
+    total_values = [sum(x) for x in zip(*total_values_list)]
+    rows.append(['Total'] + [str(x) for x in total_values])
+
+    table = AsciiTable(rows)
+    table.justify_columns = dict((i + 1, 'right') for i in range(len(columns)))
+    print(table.table)
 
 
 def main():
@@ -174,8 +162,6 @@ def main():
         reporting_date = args.reporting_date
 
     start_date = reporting_date.replace(day=1)
-    last_day = calendar.monthrange(start_date.year, start_date.month)[1]
-    end_date = start_date.replace(day=last_day)
 
     lm_end_date = start_date - datetime.timedelta(days=1)
     lm_start_date = lm_end_date.replace(day=1)
@@ -185,11 +171,6 @@ def main():
     s = get_session()
 
     report_sources = get_report_sources(s)
-
-#    products = get_products(s, report_sources, args.reporting_date)
-#    csv = get_csv(s, report_sources, products, args.reporting_date)
-#    print(csv)
-#    import sys; sys.exit(0)
 
     lookups = {}
 
@@ -201,6 +182,14 @@ def main():
         cpcodes,
         lambda x: str(x['code']),
         lambda x: x['description'])
+
+    data = []
+
+    periods = OrderedDict([
+        ('Cur MTD', (start_date, reporting_date)),
+        ('Last MTD', (lm_start_date, lm_reporting_date)),
+        ('Last Total', (lm_start_date, lm_end_date)),
+    ])
 
     for type in ('object-delivery', 'adaptive-media-delivery'):
         dimensions = get_dimensions(s, type)
@@ -215,13 +204,11 @@ def main():
             lambda x: x['name'],
             lambda x: x['id'])
 
-        for start, end in (
-            (lm_start_date, lm_reporting_date),
-            (lm_start_date, lm_end_date),
-            (start_date, reporting_date),
-            (start_date, end_date),
-        ):
-            get_data(s, type, start, end, lookups)
+        for period_idx, (start, end) in enumerate(periods.values()):
+            for cpcode, value in get_data(s, type, start, end, lookups):
+                data.append([type, period_idx, cpcode, value])
+
+    print_table(data, list(periods.keys()))
 
 
 if __name__ == '__main__':
