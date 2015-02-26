@@ -19,6 +19,18 @@ except:
 
 base_url = os.environ['AK_BASE_URL']
 
+TB_INBYTES   = 10**12
+GB_INBYTES   = 10**9
+MB_INBYTES   = 10**6
+
+def f(n_bytes): 
+    if(n_bytes/TB_INBYTES > 1):
+      return str( "%.2f" % (n_bytes/TB_INBYTES)) + ' TB'
+    elif(n_bytes/GB_INBYTES > 1):
+      return str( "%.2f" % (n_bytes/GB_INBYTES)) + ' GB'
+    else:
+      return str( "%.2f" % (n_bytes/MB_INBYTES)) + ' MB'
+    end
 
 def parse_args():
     parser = argparse.ArgumentParser(description='CDN usage report for Akamai')
@@ -140,12 +152,12 @@ def print_table(data, columns):
 
         type_values = [sum(x) for x in zip(*type_values_list)]
         rows.append([])
-        rows.append([to_title(type)] + [str(x) for x in type_values])
+        rows.append([to_title(type)] + [str(f(x)) for x in type_values])
         rows.append([])
         total_values_list.append(type_values)
 
     total_values = [sum(x) for x in zip(*total_values_list)]
-    rows.append(['Total'] + [str(x) for x in total_values])
+    rows.append(['Total'] + [str(f(x)) for x in total_values])
 
     table = AsciiTable(rows)
     table.justify_columns = dict((i + 1, 'right') for i in range(len(columns)))
