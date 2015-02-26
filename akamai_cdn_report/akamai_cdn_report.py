@@ -75,7 +75,7 @@ def get_dimensions(s, type):
     path = '/media-reports/v1/%s/dimensions' % type
     response = s.get(urljoin(base_url, path))
     if response.status_code != 200:
-        raise Exception('Cannot get object delivery dimensions')
+        raise Exception('Cannot get download delivery dimensions')
 
     return json.loads(response.text)
 
@@ -84,7 +84,7 @@ def get_metrics(s, type):
     path = '/media-reports/v1/%s/metrics' % type
     response = s.get(urljoin(base_url, path))
     if response.status_code != 200:
-        raise Exception('Cannot get object delivery metrics')
+        raise Exception('Cannot get download delivery metrics')
 
     return json.loads(response.text)
 
@@ -191,7 +191,7 @@ def main():
         ('Last Total', (lm_start_date, lm_end_date)),
     ])
 
-    for type in ('object-delivery', 'adaptive-media-delivery'):
+    for type in ('download-delivery', 'adaptive-media-delivery'):
         dimensions = get_dimensions(s, type)
         lookups['dimension'] = create_lookup(
             dimensions,
