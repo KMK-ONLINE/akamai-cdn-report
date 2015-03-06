@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import math
 import os
 
 from collections import OrderedDict
@@ -19,18 +20,20 @@ except:
 
 base_url = os.environ['AK_BASE_URL']
 
-TB_INBYTES   = 10**12
-GB_INBYTES   = 10**9
-MB_INBYTES   = 10**6
+TB_IN_MBYTES = 10**6
+GB_IN_MBYTES = 10**3
+#TB_IN_MBYTES = int(math.pow(2, 20))
+#GB_IN_MBYTES = int(math.pow(2, 10))
 
-def f(n_bytes): 
-    if(n_bytes/TB_INBYTES > 1):
-      return str( "%.2f" % (n_bytes/TB_INBYTES)) + ' TB'
-    elif(n_bytes/GB_INBYTES > 1):
-      return str( "%.2f" % (n_bytes/GB_INBYTES)) + ' GB'
+
+def f(n_mbytes): 
+    if (n_mbytes / TB_IN_MBYTES > 1):
+      return '%.2f TB' % (n_mbytes / TB_IN_MBYTES)
+    elif (n_mbytes / GB_IN_MBYTES > 1):
+      return '%.2f GB' % (n_mbytes / GB_IN_MBYTES)
     else:
-      return str( "%.2f" % (n_bytes/MB_INBYTES)) + ' MB'
-    end
+      return '%.2f MB' % n_mbytes
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='CDN usage report for Akamai')
@@ -119,7 +122,7 @@ def get_data(s, type, start_date, end_date, lookups):
 
     if response.status_code != 200:
         print(response.status_code, response.text)
-        raise Exception('Cannot get data for %s' % type)
+        raise Exception('Cannot get data: %s' % response.url)
 
     result = json.loads(response.text)
     for row in result['rows']:
@@ -147,17 +150,17 @@ def print_table(data, columns):
 
         for cpcode, values in data_by_cpcode.items():
             # call str as terminaltables can only print strings
-            rows.append([cpcode] + [str(x) for x in values])
+            rows.append([cpcode] + [f(x) for x in values])
             type_values_list.append(values)
 
         type_values = [sum(x) for x in zip(*type_values_list)]
         rows.append([])
-        rows.append([to_title(type)] + [str(f(x)) for x in type_values])
+        rows.append([to_title(type)] + [f(x) for x in type_values])
         rows.append([])
         total_values_list.append(type_values)
 
     total_values = [sum(x) for x in zip(*total_values_list)]
-    rows.append(['Total'] + [str(f(x)) for x in total_values])
+    rows.append(['Total'] + [f(x) for x in total_values])
 
     table = AsciiTable(rows)
     table.justify_columns = dict((i + 1, 'right') for i in range(len(columns)))
@@ -217,8 +220,12 @@ def main():
             lambda x: x['id'])
 
         for period_idx, (start, end) in enumerate(periods.values()):
-            for cpcode, value in get_data(s, type, start, end, lookups):
-                data.append([type, period_idx, cpcode, value])
+            try:
+              for cpcode, value in get_data(s, type, start, end, lookups):
+                  data.append([type, period_idx, cpcode, value])
+            except Exception as ex:
+              print(ex)
+              continue
 
     print_table(data, list(periods.keys()))
 
