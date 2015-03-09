@@ -22,9 +22,6 @@ base_url = os.environ['AK_BASE_URL']
 
 TB_IN_MBYTES = 10**6
 GB_IN_MBYTES = 10**3
-#TB_IN_MBYTES = int(math.pow(2, 20))
-#GB_IN_MBYTES = int(math.pow(2, 10))
-
 
 def f(n_mbytes): 
     if (n_mbytes / TB_IN_MBYTES > 1):
@@ -121,8 +118,7 @@ def get_data(s, type, start_date, end_date, lookups):
         return
 
     if response.status_code != 200:
-        print(response.status_code, response.text)
-        raise Exception('Cannot get data: %s' % response.url)
+        raise Exception("Cannot get data: %s \n Respose Code: %s \n Response Text: %s \n" % (response.url, response.status_code, response.text))
 
     result = json.loads(response.text)
     for row in result['rows']:
@@ -170,6 +166,7 @@ def print_table(data, columns):
 def main():
     args = parse_args()
 
+    log_file = open("/tmp/akamai_cdn_report_error.log","w")
     if isinstance(args.reporting_date, str):
         reporting_date = datetime.datetime.strptime(
             args.reporting_date, '%Y-%m-%d').date()
@@ -224,10 +221,11 @@ def main():
               for cpcode, value in get_data(s, type, start, end, lookups):
                   data.append([type, period_idx, cpcode, value])
             except Exception as ex:
-              print(ex)
+              log_file.write(str(ex))
               continue
 
     print_table(data, list(periods.keys()))
+    log_file.close()
 
 
 if __name__ == '__main__':
