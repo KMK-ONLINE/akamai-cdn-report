@@ -12,6 +12,8 @@ setup(
     install_requires = [
         'edgegrid-python>=1.0.5',
         'terminaltables',
+        'nose',
+        'responses',
     ],
 #    license='LICENSE.txt',
     entry_points = {

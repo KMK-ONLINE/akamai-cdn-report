@@ -1,2 +1,4 @@
 edgegrid-python>=1.0.5
 terminaltables
+nose
+responses

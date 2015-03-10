@@ -106,12 +106,12 @@ def get_data(s, type, start_date, end_date, lookups):
 
     # Endpoint expects a datetime, need to plus 1 to endDate to get midnight
     dt_format = '%m/%d/%Y:%H:%M'
-    params = {
-        'startDate': start_date.strftime(dt_format),
-        'endDate': (end_date + datetime.timedelta(days=1)).strftime(dt_format),
-        'dimensions': lookups['dimension']['Cpcode'],
-        'metrics': lookups['metric']['Edge Volume'],
-    }
+    params = (
+        ('startDate', start_date.strftime(dt_format)),
+        ('endDate', (end_date + datetime.timedelta(days=1)).strftime(dt_format)),
+        ('dimensions', lookups['dimension']['Cpcode']),
+        ('metrics', lookups['metric']['Edge Volume']),
+    )
     response = s.get(urljoin(base_url, path), params=params)
 
     if response.status_code == 204:
