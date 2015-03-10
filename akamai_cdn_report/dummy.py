@@ -57,12 +57,24 @@ def cpcodes(type, id, month, year):
     }
 
 
+@route('/media-reports/v1/download-delivery/dimensions')
+def dd_dimensions():
+    response.content_type = 'application/json'
+    ret = [{'id': 18, 'description': 'content_type', 'name': 'Content Type'}, {'id': 2, 'description': 'cpcode', 'name': 'Cpcode'}, {'id': 19, 'description': 'file_extension', 'name': 'File Extension'}, {'id': 6, 'description': 'File Size Bucket', 'name': 'File Size Bucket'}, {'id': 1, 'description': 'time', 'name': 'Time'}]
+    return dumps(ret)
+
+@route('/media-reports/v1/download-delivery/metrics')
+def dd_metrics():
+    response.content_type = 'application/json'
+    ret = [{'unit': None, 'id': 21, 'type': 'count', 'description': 'hits_2xx', 'name': '2XX Edge Hits'}, {'unit': None, 'id': 24, 'type': 'count', 'description': 'hits_3xx', 'name': '3XX Edge Hits'}, {'unit': None, 'id': 25, 'type': 'count', 'description': 'hits_404', 'name': '404 Edge Hits'}, {'unit': None, 'id': 28, 'type': 'count', 'description': 'hits_4xx', 'name': '4XX Edge Hits'}, {'unit': None, 'id': 29, 'type': 'count', 'description': 'hits_5xx', 'name': '5XX Edge Hits'}, {'unit': '%', 'id': 112, 'type': 'percent', 'description': 'Cache Efficiency OD', 'name': 'Cache Efficiency'}, {'unit': None, 'id': 102, 'type': 'count', 'description': 'Edge Errors', 'name': 'Edge Errors'}, {'unit': None, 'id': 4, 'type': 'count', 'description': 'egress_hits', 'name': 'Edge Hits'}, {'unit': 'bps', 'id': 109, 'type': 'bandwidth', 'description': 'Edge Throughput - OD', 'name': 'Edge Throughput'}, {'unit': 'MB', 'id': 44, 'type': 'volume', 'description': 'Egress Bytes in MB', 'name': 'Edge Volume'}, {'unit': None, 'id': 46, 'type': 'count', 'description': 'origin_hits', 'name': 'Ingress Hits'}, {'unit': 'bytes', 'id': 43, 'type': 'volume', 'description': 'midgress_bytes', 'name': 'Midgress Bytes'}, {'unit': 'bytes', 'id': 9, 'type': 'volume', 'description': 'midgress_hits', 'name': 'Midgress hits'}, {'unit': 'bytes', 'id': 35, 'type': 'volume', 'description': 'netstorage_bytes', 'name': 'Netstorage Bytes'}, {'unit': None, 'id': 34, 'type': 'count', 'description': 'netstorage_hits', 'name': 'Netstorage Hits'}, {'unit': 'bytes', 'id': 42, 'type': 'volume', 'description': 'origin_bytes', 'name': 'Origin Bytes'}, {'unit': '%', 'id': 111, 'type': 'percent', 'description': 'Origin Offload OD', 'name': 'Origin Offload'}, {'unit': None, 'id': 36, 'type': None, 'description': 'sparemetric_1', 'name': 'sparemetric_1'}, {'unit': None, 'id': 37, 'type': None, 'description': 'sparemetric_2', 'name': 'sparemetric_2'}]
+    return dumps(ret)
+
+
 @route('/media-reports/v1/object-delivery/dimensions')
 def od_dimensions():
     response.content_type = 'application/json'
     ret = [{'id': 18, 'description': 'content_type', 'name': 'Content Type'}, {'id': 2, 'description': 'cpcode', 'name': 'Cpcode'}, {'id': 19, 'description': 'file_extension', 'name': 'File Extension'}, {'id': 6, 'description': 'File Size Bucket', 'name': 'File Size Bucket'}, {'id': 1, 'description': 'time', 'name': 'Time'}]
     return dumps(ret)
-
 
 @route('/media-reports/v1/object-delivery/metrics')
 def od_metrics():
@@ -78,6 +90,62 @@ def parse_dt(s):
 
 def to_timestamp(dt):
     return int(time.mktime(dt.timetuple()))
+
+@route('/media-reports/v1/download-delivery/data')
+def od_data():
+    dt_format = '%m/%d/%Y:%H:%M'
+    start_date = parse_dt(request.query.startDate)
+    end_date = parse_dt(request.query.endDate)
+
+    data = [
+        [
+            ['123460', '1230415.26'], 
+            ['123456', '10389.74'], 
+            ['123466', '4016.57'], 
+            ['123461', '1.68'], 
+        ],
+        [
+            ['123456', '2152.38'],
+        ],
+        [
+            ['123456', '3858.24'],
+            ['123460', '395.39'],
+            ['123461', '0.02'],
+        ],
+    ]
+
+    if end_date.date() == datetime.date(2015, 2, 1):
+        d = data[2]
+    elif start_date.date() == datetime.date(2015, 1, 1):
+        d = data[1]
+    else:
+        d = data[0]
+
+    return {
+        'rows': d,
+        'columns': [
+            {'index': 0, 'description': 'cpcode', 'type': 'dimension', 'name': 'Cpcode'}, 
+            {
+                'unit': 'MB',
+                'index': 1,
+                'peak': str(max(float(x) for x in list(zip(*d))[1])),
+                'description': 'Egress Bytes in MB',
+                'type': 'metric',
+                'aggregate': str(round(sum(float(x) for x in list(zip(*d))[1]), 2)),
+                'name': 'Edge Volume',
+            }
+        ], 
+        'metaData': {
+            'hasMoreData': False,
+            'aggregation': 'day',
+            'limit': 300,
+            'reportPack': 'PT XYZ DOT COM',
+            'offset': 0,
+            'startTimeInEpoch': to_timestamp(start_date),
+            'endTimeInEpoch': to_timestamp(end_date),
+            'timeZone': 'GMT',
+        }
+    }
 
 
 @route('/media-reports/v1/object-delivery/data')
