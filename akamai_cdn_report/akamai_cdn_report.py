@@ -189,7 +189,7 @@ def main():
     cpcodes = []
     today = datetime.date.today()
     for report_source in report_sources:
-        cpcodes += get_cpcodes(s, report_source, today.month, today.year)
+        cpcodes += get_cpcodes(s, report_source, start_date.month, start_date.year)
     lookups['cpcode'] = create_lookup(
         cpcodes,
         lambda x: str(x['code']),
